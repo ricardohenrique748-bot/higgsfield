@@ -19,7 +19,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   console.info("[blob] upload", summarizeBlobEvent(body));
 
   try {
-    const token = process.env.OPEN_HIGGSFIELD_READ_WRITE_TOKEN;
+    // Pasted dashboard values can carry stray whitespace or quotes, which break the token signature.
+    const token = process.env.OPEN_HIGGSFIELD_READ_WRITE_TOKEN?.trim().replace(/^["']|["']$/g, "");
     if (!token) throw new Error("Missing OPEN_HIGGSFIELD_READ_WRITE_TOKEN");
     const json = await handleUpload({
       body,
