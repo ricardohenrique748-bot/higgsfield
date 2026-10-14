@@ -13,7 +13,7 @@ import {
   parseCredentialInput,
 } from "./credentials";
 import { createPlatformClient } from "./platform";
-import type { StatusResult } from "./platform";
+import type { QueuedGeneration, StatusResult } from "./platform";
 import { toPlatform } from "./to-platform";
 
 export async function savePlatformCredentials(data: unknown) {
@@ -31,14 +31,23 @@ export async function hasPlatformCredentials() {
   return (await readStoredCredentials()) !== null;
 }
 
-export async function submitGeneration(plane: GenerationPlane) {
-  const model = getModel(plane.model);
-  const parsed: GenerationPlane = {
-    ...plane,
-    settings: parseSettings(model, plane.settings),
-  };
-  const { path, body } = toPlatform(parsed);
-  return createPlatformClient(await readCredentials()).submit(path, body);
+/** Failures come back as values: production builds replace a thrown server-action
+    error with an opaque digest, which would hide "bad key" or "no credits". */
+export async function submitGeneration(
+  plane: GenerationPlane,
+): Promise<{ ok: true; queued: QueuedGeneration } | { ok: false; error: string }> {
+  try {
+    const model = getModel(plane.model);
+    const parsed: GenerationPlane = {
+      ...plane,
+      settings: parseSettings(model, plane.settings),
+    };
+    const { path, body } = toPlatform(parsed);
+    return { ok: true, queued: await createPlatformClient(await readCredentials()).submit(path, body) };
+  } catch (caught) {
+    console.error("[generation] submit failed", caught);
+    return { ok: false, error: caught instanceof Error ? caught.message : String(caught) };
+  }
 }
 
 /** Every request in flight, answered in one round trip. Next dispatches server
